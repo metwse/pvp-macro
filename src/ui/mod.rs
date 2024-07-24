@@ -8,7 +8,7 @@ use fltk::{prelude::*, *};
 use theme::Theme;
 use util::*;
 
-use crate::keyboard::listener::MacroListener;
+use crate::keyboard::MacroListener;
 use std::sync::Arc;
 
 pub fn init(listener: Arc<MacroListener>) -> app::App {
@@ -113,7 +113,7 @@ pub fn init(listener: Arc<MacroListener>) -> app::App {
     // {{{ sidebar buttons
     enum MenuFn {
         Standard (fn(crate::ui::menus::MenuFrame) -> (), ),
-        Macro (fn(crate::ui::menus::MenuFrame, Arc<crate::keyboard::listener::MacroListener>) -> (), ),
+        Macro (fn(crate::ui::menus::MenuFrame, Arc<crate::keyboard::MacroListener>) -> (), ),
         NoArg (fn() -> (), ),
     }
 
@@ -127,6 +127,7 @@ pub fn init(listener: Arc<MacroListener>) -> app::App {
             ("sidebar/metw.svg", MenuFn::NoArg(menus::metw)),
         ]
     {
+        listener.stop().unwrap_or(());
 
         let mut button = button::Button::default();
         sidebar.fixed(&button, 44);
@@ -171,6 +172,12 @@ pub fn init(listener: Arc<MacroListener>) -> app::App {
     win.end();
     win.show();
 
+    win.set_callback(|_| {
+        if app::event() == enums::Event::Close {
+            app::quit()
+        }
+    });
+    
     a
 }
 

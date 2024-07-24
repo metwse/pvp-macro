@@ -1,6 +1,6 @@
 use fltk::{prelude::*, *};
 
-use crate::keyboard::listener::MacroListener;
+use crate::keyboard::MacroListener;
 
 use std::sync::Arc;
 
@@ -106,8 +106,8 @@ pub fn info(frame: MenuFrame) {
 
 pub fn run(frame: MenuFrame, listener: Arc<MacroListener>) {
     frame.begin();
-    let _ = frame::Frame::default().with_label("Not implemented yet");
-    println!("{}", (*listener).is_listening());
+    let _ = frame::Frame::default().with_label("pvp macro çalışıyor");
+    listener.start().unwrap_or(());
     frame.end();
 }
 

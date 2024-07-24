@@ -7,7 +7,7 @@ use std::{
 };
 
 fn main() {
-    let listener = keyboard::listener::MacroListener::new();
+    let listener = keyboard::MacroListener::new();
 
     let listener2 = Arc::clone(&listener);
     thread::spawn(move || {
