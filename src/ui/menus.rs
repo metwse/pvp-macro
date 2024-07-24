@@ -1,15 +1,23 @@
 use fltk::{prelude::*, *};
 
-use super::{ theme, Theme, util::* };
+use crate::keyboard::listener::MacroListener;
+
+use std::sync::Arc;
+
+use super::{ 
+    theme::{self, format_button}, Theme,
+    util::* 
+};
 use webbrowser;
+
 
 pub type MenuFrame<'a> = &'a mut group::Flex;
 
 pub fn settings(frame: MenuFrame) {
     #[derive(Debug)]
     enum In {
-        F (input::FloatInput),
-        I (input::IntInput),
+        F (f64),
+        I (i32),
     }
 
     frame.set_type(group::FlexType::Column);
@@ -30,17 +38,26 @@ pub fn settings(frame: MenuFrame) {
         frame.end();
     }
 
-    for (text, input) in 
+    for (text, input_type) in 
         [
-            ("Kılıç CPS", In::F(input::FloatInput::default())),
-            ("Olta atma sayısı", In::I(input::IntInput::default())),
-            ("Olta başına atma süresi", In::F(input::FloatInput::default())),
-            ("Rastgelelik yüzdesi", In::F(input::FloatInput::default())),
+            ("Kılıç CPS", In::F(13.0)),
+            ("Kılıç vurma sayısı", In::I(13)),
+            ("Olta atma sayısı", In::I(5)),
+            ("Olta başına atma süresi", In::F(0.2)),
+            ("Rastgelelik yüzdesi", In::F(20.0)),
         ] 
     {
-        match input {
-            In::F(mut input) => input_num_field(frame, String::from(text), &mut input),
-            In::I(mut input) => input_num_field(frame, String::from(text), &mut input),
+        match input_type {
+            In::F(default) => {
+                let mut input = input::FloatInput::default();
+                input_num_field(frame, String::from(text), &mut input);
+                input.set_value(&default.to_string()[..]);
+            },
+            In::I(default) => {
+                let mut input = input::IntInput::default();
+                input_num_field(frame, String::from(text), &mut input);
+                input.set_value(&default.to_string()[..]);
+            },
         }
     }
 }
@@ -87,10 +104,64 @@ pub fn info(frame: MenuFrame) {
 }
 
 
-
-pub fn run(frame: MenuFrame) {
+pub fn run(frame: MenuFrame, listener: Arc<MacroListener>) {
     frame.begin();
     let _ = frame::Frame::default().with_label("Not implemented yet");
+    println!("{}", (*listener).is_listening());
+    frame.end();
+}
+
+
+pub fn keybindings(frame: MenuFrame) {
+    frame.begin();
+    frame.set_type(group::FlexType::Column);
+
+    enum KeyType {
+        Num,
+        All,
+    }
+
+    fn keybinding(label: &str, buttons: &[(KeyType, &str)]) -> group::Flex {
+        let mut flex = group::Flex::default();
+
+        let frame = frame::Frame::default().with_label(label);
+        flex.fixed(&frame, frame.measure_label().0 + 8);
+        let _ = frame::Frame::default();
+        for (btn_type, default_key) in buttons {
+            let mut btn = button::Button::default().with_label(default_key);
+            flex.fixed(&btn, btn.measure_label().0 + 16);
+            format_button(&mut btn);
+            btn_cursor(&mut btn);
+            let _ = match btn_type {
+                KeyType::Num => {
+                    true
+                },
+                KeyType::All => {
+                    true
+                },
+            };
+        }
+
+        flex.end();
+        flex
+    }
+    
+    frame.fixed(&keybinding("Başlat", &[(KeyType::All, "CTRL")]), 24);
+    frame.fixed(&frame::Frame::default(), 4);
+    frame.fixed(&keybinding("Kılıç eli", &[(KeyType::Num, "1")]), 24);
+    frame.fixed(&keybinding("Olta eli", &[(KeyType::Num, "2")]), 24);
+    frame.fixed(&frame::Frame::default(), 4);
+
+    for (i, key) in ["z", "x", "c", "v"].iter().enumerate() {
+        frame.fixed(
+            &keybinding(&format!("Özel {}", i + 1)[..], 
+                &[
+                (KeyType::Num, &(i + 1).to_string()[..]),
+                (KeyType::All, key),
+                ]), 
+            24);
+    }
+
     frame.end();
 }
 

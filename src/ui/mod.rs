@@ -1,14 +1,17 @@
 mod menus;
 mod theme;
 mod util;
+mod key_picker;
 
 use fltk::{prelude::*, *};
 
 use theme::Theme;
 use util::*;
 
+use crate::keyboard::listener::MacroListener;
+use std::sync::Arc;
 
-pub fn init() -> app::App {
+pub fn init(listener: Arc<MacroListener>) -> app::App {
     let a = app::App::default();
     
     // default colors
@@ -24,7 +27,7 @@ pub fn init() -> app::App {
     }
     app::set_visible_focus(false);
 
-    let mut win = window::Window::default().with_label("pvp macro").with_size(248, 274).with_id("window");
+    let mut win = window::Window::default().with_label("pvp macro").with_size(248, 324).with_id("window");
     win.set_border(false);
 
     let mut root = group::Flex::default().size_of(&win);
@@ -39,21 +42,31 @@ pub fn init() -> app::App {
 
     let mut title = frame::Frame::default().with_label("PvP Macro by metwse");
     title.set_label_color(Theme::COLOR);
-    navbar.fixed(&title, 160);
+    navbar.fixed(&title, title.measure_label().0 + 8);
 
     let _ = frame::Frame::default(); // filler
 
     // navbar buttons
-    let mut minimize_button = button::Button::default().with_label("‒");
-    navbar.fixed(&minimize_button, 24);
-    minimize_button.set_frame(enums::FrameType::FlatBox);
-    minimize_button.set_color(Theme::NAVBAR_BG);
-    minimize_button.set_selection_color(Theme::BG_1);
-    let mut close_button = button::Button::default().with_label("×");
-    navbar.fixed(&close_button, 24);
-    close_button.set_frame(enums::FrameType::FlatBox);
-    close_button.set_color(Theme::NAVBAR_BG);
-    close_button.set_selection_color(Theme::NAVBAR_QUIT_BG);
+    for (label, selection_color, index) in [
+        ("‒", Theme::BG_1, 1),
+        ("×", Theme::NAVBAR_QUIT_BG, 2),
+    ] {
+        let mut btn = button::Button::default().with_label(label);
+        navbar.fixed(&btn, 24);
+        btn.set_callback(move |_| {
+            match index {
+                1 => { 
+                    let mut win = app::widget_from_id::<window::Window>("window").unwrap();
+                    win.iconize();
+                },
+                2 => app::quit(),
+                _ => unreachable!(),
+            };
+        });
+        btn.set_frame(enums::FrameType::FlatBox);
+        btn.set_color(Theme::NAVBAR_BG);
+        btn.set_selection_color(selection_color);
+    }
 
     navbar.end();
 
@@ -90,15 +103,28 @@ pub fn init() -> app::App {
     sidebar.set_frame(enums::FrameType::FlatBox);
     sidebar.set_margin(2);
 
+    root2.begin();
+    let mut menu = group::Flex::default().with_id("menu");
+    menu.set_margin(8);
+    menus::info(&mut menu);
+    root2.end();
+
 
     // {{{ sidebar buttons
-    type MenuFn = fn(crate::ui::menus::MenuFrame) -> ();
+    enum MenuFn {
+        Standard (fn(crate::ui::menus::MenuFrame) -> (), ),
+        Macro (fn(crate::ui::menus::MenuFrame, Arc<crate::keyboard::listener::MacroListener>) -> (), ),
+        NoArg (fn() -> (), ),
+    }
+
+    sidebar.begin();
     for (asset, function) in 
         [
-            ("sidebar/settings.svg", menus::settings as MenuFn),
-            ("sidebar/run.svg", menus::run as MenuFn), 
-            ("sidebar/info.svg", menus::info as MenuFn), 
-            ("sidebar/metw.svg", menus::info as MenuFn),
+            ("sidebar/run.svg", MenuFn::Macro(menus::run)),
+            ("sidebar/settings.svg", MenuFn::Standard(menus::settings)),
+            ("sidebar/keybindings.svg", MenuFn::Standard(menus::keybindings)),
+            ("sidebar/info.svg", MenuFn::Standard(menus::info)),
+            ("sidebar/metw.svg", MenuFn::NoArg(menus::metw)),
         ]
     {
 
@@ -114,10 +140,10 @@ pub fn init() -> app::App {
         button.set_image(Some(image));
 
         let root2 = root2.clone();
+        let listener2 = Arc::clone(&listener);
         button.set_callback(move |_| {
-            if asset == "sidebar/metw.svg" {
-                menus::metw();
-                return;
+            if let MenuFn::NoArg(function) = function {
+                return function()
             }
 
             if let Some(wid) = app::widget_from_id::<group::Flex>("menu") {
@@ -125,18 +151,22 @@ pub fn init() -> app::App {
             }
 
             root2.begin();
-            let mut menu = group::Flex::default().with_id("menu").with_size(100, 100);
+            let mut menu = group::Flex::default().with_id("menu");
             menu.set_margin(8);
             root2.end();
 
-            function(&mut menu);
+            match function {
+                MenuFn::Standard(function) => function(&mut menu),
+                MenuFn::Macro(function) => function(&mut menu, Arc::clone(&listener2)),
+                _ => unreachable!()
+            }
+
             app::redraw();
         });
     }
     sidebar.end();
     // }}}
 
-    root2.end();
     root.end();
     win.end();
     win.show();

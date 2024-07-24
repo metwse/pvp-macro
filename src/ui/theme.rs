@@ -18,3 +18,8 @@ impl Theme {
 pub fn format_input(input: &mut dyn InputExt) {
     input.set_frame(enums::FrameType::FlatBox);
 }
+
+pub fn format_button(btn: &mut dyn ButtonExt) {
+    btn.set_frame(enums::FrameType::FlatBox);
+    btn.set_color(Theme::BG_2);
+}
