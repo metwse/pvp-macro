@@ -12,6 +12,7 @@ enum Message {
     Skip,
     Abort,
     Start,
+    Stop,
 }
 
 
@@ -62,20 +63,16 @@ impl MacroService {
 
     fn sleep(&self, micros: u64, run: impl Fn() -> ()) -> Message {
         let (lock, cvar) = &self.park;
-        run();
         let (message, result) = cvar.wait_timeout(lock.lock().unwrap(), Duration::from_micros(micros)).unwrap();
         if !result.timed_out() { return *message; }
+        run();
 
         Message::None
     }
 
-    fn is_running(&self) -> bool {
-        *self.running.lock().unwrap()
-    }
+    fn is_running(&self) -> bool { *self.running.lock().unwrap() }
 
-    fn is_initialized(&self) -> bool {
-        *self.initialized.lock().unwrap()
-    }
+    fn is_initialized(&self) -> bool { *self.initialized.lock().unwrap() }
 
     /// Initializes macro thread.
     ///
@@ -95,37 +92,41 @@ impl MacroService {
             let mut rng = thread_rng();
             
             'outer: loop {
-                'inner: loop {
-                    let (lock, cvar) = &listener.park;
-                    let message = cvar.wait(lock.lock().unwrap()).unwrap();
-
-                    match *message {
-                        Message::Start => break 'inner,
-                        Message::Abort => break 'outer,
-                        _ => unreachable!(),
-                    }
-                }
-
-                'inner: loop {
-                    for i in 0..2 {
-                        let settings = listener.settings.lock().unwrap();
-                        for _ in 0..=(settings.count[i] + 1){
-                            match listener.sleep(((1.0 + rng.gen_range(-settings.random_ratio..=settings.random_ratio)) * settings.sleep_micros[i] as f64).round() as u64, || {
-                                if i == 0 {
-                                    listener.minecraft.as_ref().unwrap().use_sword();
-                                } else {
-                                    listener.minecraft.as_ref().unwrap().use_fishing_rod();
+                let (lock, cvar) = &listener.park;
+                let message = *cvar.wait(lock.lock().unwrap()).unwrap();
+                match message {
+                    Message::Start => {
+                        *listener.running.lock().unwrap() = true;
+                        'inner: loop {
+                            for i in 0..2 {
+                                let settings = listener.settings.lock().unwrap();
+                                for _ in 0..=(settings.count[i] + 1){
+                                    match listener.sleep(((1.0 + rng.gen_range(-settings.random_ratio..=settings.random_ratio)) * settings.sleep_micros[i] as f64).round() as u64, || {
+                                        if i == 0 {
+                                            listener.minecraft.as_ref().unwrap().use_sword();
+                                        } else {
+                                            listener.minecraft.as_ref().unwrap().use_fishing_rod();
+                                        }
+                                    }) {
+                                        Message::Stop => {
+                                            *listener.running.lock().unwrap() = false;
+                                            break 'inner
+                                        },
+                                        Message::Skip => (),
+                                        Message::Abort => break 'outer,
+                                        Message::None => (),
+                                        _ => unreachable!(),
+                                    }
                                 }
-                            }) {
-                                Message::Skip => break 'inner,
-                                Message::Abort => break 'outer,
-                                Message::None => (),
-                                _ => unreachable!(),
                             }
                         }
-                    }
+                    },
+                    Message::Abort => { break 'outer },
+                    _ => unreachable!(),
                 }
             }
+            *listener.running.lock().unwrap() = false;
+            *listener.initialized.lock().unwrap() = false;
         });
         
         Ok(())
@@ -145,8 +146,6 @@ impl MacroService {
     pub fn abort(&self) -> Result<(), String> {
         if !self.is_initialized() { return Err(String::from("Macro is not initialized")); }
 
-        *self.running.lock().unwrap() = false;
-        *self.initialized.lock().unwrap() = false;
         self.notify_thread(Message::Abort);
         Ok(())
     }
@@ -160,8 +159,7 @@ impl MacroService {
         if !self.is_initialized() { return Err(String::from("Macro is not initialized")); }
         if !self.is_running() { return Err(String::from("Macro is not running")); }
 
-        *self.running.lock().unwrap() = false;
-        self.notify_thread(Message::Skip);
+        self.notify_thread(Message::Stop);
         Ok(())
     }
 
@@ -174,9 +172,14 @@ impl MacroService {
         if !self.is_initialized() { return Err(String::from("Macro is not initialized")); }
         if self.is_running() { return Err(String::from("Macro is already running")); }
 
-        *self.running.lock().unwrap() = true;
         self.notify_thread(Message::Start);
         Ok(())
     }
 
+    pub fn use_item(&self, slot: rdev::Key) {
+        if self.is_running() {
+            self.notify_thread(Message::Skip);
+        }
+        self.minecraft.as_ref().unwrap().use_item(slot);
+    }
 }

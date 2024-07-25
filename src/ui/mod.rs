@@ -8,10 +8,10 @@ use fltk::{prelude::*, *};
 use theme::Theme;
 use util::*;
 
-use crate::keyboard::MacroListener;
+use crate::keyboard::Listener;
 use std::sync::Arc;
 
-pub fn init(listener: Arc<MacroListener>) -> app::App {
+pub fn init(listener: Arc<Listener>) -> app::App {
     let a = app::App::default();
     
     // default colors
@@ -114,7 +114,7 @@ pub fn init(listener: Arc<MacroListener>) -> app::App {
     // {{{ sidebar buttons
     enum MenuFn {
         Standard (fn(crate::ui::menus::MenuFrame) -> (), ),
-        Macro (fn(crate::ui::menus::MenuFrame, Arc<crate::keyboard::MacroListener>) -> (), ),
+        Macro (fn(crate::ui::menus::MenuFrame, Arc<crate::keyboard::Listener>) -> (), ),
         NoArg (fn() -> (), ),
     }
 

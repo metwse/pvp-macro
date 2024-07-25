@@ -1,52 +1,35 @@
-use core::panic;
-use std::{
-    fs, io, path::PathBuf, sync::{Arc, Mutex}
+use std::sync::{
+    Arc, Mutex,
 };
 
-use super::{MacroService, minecraft};
-use crate::keyboard::Config;
+use super::{run, minecraft};
 
 use rdev::{
     listen,
     Event, EventType
 };
 
-pub struct MacroListener {
+/// Listens keyboard and manages macro.
+pub struct Listener {
     listening: Mutex<bool>,
     running: Mutex<bool>,
-    service: Arc<MacroService>,
+    service: Arc<run::MacroService>,
     minecraft: Arc<minecraft::Minecraft>,
 }
 
-
-impl MacroListener {
+impl Listener {
     pub fn new() -> Arc<Self> {
         let minecraft = minecraft::Minecraft::new();
-        let service = Arc::new(MacroService::new(Arc::clone(&minecraft)));
+        let service = Arc::new(run::MacroService::new(Arc::clone(&minecraft)));
         Arc::clone(&service).init().unwrap();
         Arc::new(
             Self {
-                service,
                 listening: Mutex::new(false),
                 running: Mutex::new(false),
                 minecraft,
+                service,
             }
         )
-    }
-
-    pub fn load_keybindings(&self, path: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
-        let file = fs::File::open(path)?;
-        let mut reader = io::BufReader::new(file);
-        self.minecraft.load_keybindings(minecraft::KeyBindings::from_json(&mut reader));
-        Ok(())
-    }
-    
-    pub fn is_listening(&self) -> bool {
-        *self.listening.lock().unwrap()
-    }
-
-    pub fn is_running(&self) -> bool {
-        *self.running.lock().unwrap()
     }
 
     /// Runs keyboard listener.
@@ -61,13 +44,14 @@ impl MacroListener {
     fn callback(&self, event: Event) {
         if !self.is_running() { return }
         let keybindings = self.minecraft.keybindings.lock().unwrap();
+
         match event.event_type {
             EventType::KeyPress(key) => {
                 if key == keybindings.start { self.service.start().unwrap_or(()) }
                 else {
                     for [hotkey, slot] in keybindings.custom.iter() {
                         if key == *hotkey {
-                            self.minecraft.use_item(slot.clone());
+                            self.service.use_item(slot.clone());
                             break;
                         }
                     }
@@ -101,4 +85,8 @@ impl MacroListener {
         *self.running.lock().unwrap() = false;
         Ok(())
     }
+
+    pub fn is_listening(&self) -> bool { *self.listening.lock().unwrap() }
+
+    pub fn is_running(&self) -> bool { *self.running.lock().unwrap() }
 }

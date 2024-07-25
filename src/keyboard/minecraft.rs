@@ -14,13 +14,13 @@ use std::{
 
 pub struct Minecraft {
     tx: Arc<mpsc::Sender<Message>>,
+    busy: Arc<Mutex<bool>>,
     pub keybindings: Mutex<KeyBindings>,
 }
 
 enum Message {
-    UseItem(Key),
-    UseItemWeak(Key),
-    PunchItemWeak(Key),
+    UseItem(Key, bool),
+    PunchItem(Key, bool),
 }
 
 impl Minecraft {
@@ -31,8 +31,11 @@ impl Minecraft {
 
         let minecraft = Arc::new(Self {
             keybindings:  Mutex::new(KeyBindings::default()),
+            busy: Arc::new(Mutex::new(false)),
             tx
         });
+
+        let busy = Arc::clone(&minecraft.busy);
 
         thread::spawn(move || {
             let key_press = Rc::new(RefCell::new(None));
@@ -42,21 +45,20 @@ impl Minecraft {
             let kp2 = Rc::clone(&key_press);
             let bp2 = Rc::clone(&button_press);
             let sk2 = Rc::clone(&skip);
-            let send = |event_type: &EventType| {
-                if matches![*skip.try_borrow().unwrap_or(RefCell::new(None).borrow()), Some(_)] { return }
-
-                match event_type {
-                    EventType::KeyPress(key) => *kp2.borrow_mut() = Some(*key),
-                    EventType::KeyRelease(_) => *kp2.borrow_mut() = None,
-                    EventType::ButtonPress(button) => *bp2.borrow_mut() = Some(*button),
-                    EventType::ButtonRelease(_) => *bp2.borrow_mut() = None,
-                    _ => unreachable!()
-                }
-                simulate(event_type).unwrap_or(());
-                if let Ok(message) = rx.recv_timeout(Duration::from_millis(8)) {
-                    if matches!(message, Message::UseItem(_)) {
-                        *sk2.borrow_mut() = Some(message);
+            let send = |events: Vec<&EventType>| {
+                for event in events {
+                    match event {
+                        EventType::KeyPress(key) => *kp2.borrow_mut() = Some(*key),
+                        EventType::KeyRelease(_) => *kp2.borrow_mut() = None,
+                        EventType::ButtonPress(button) => *bp2.borrow_mut() = Some(*button),
+                        EventType::ButtonRelease(_) => *bp2.borrow_mut() = None,
+                        _ => unreachable!()
                     }
+                    simulate(event).unwrap_or(());
+                }
+                if let Ok(message) = rx.recv_timeout(Duration::from_millis(30)) {
+                    *sk2.borrow_mut() = Some(message);
+                    return
                 }
             };
 
@@ -65,30 +67,26 @@ impl Minecraft {
             let release_all = || {
                 if let Some(key) = (*kp2.borrow_mut()).take() { simulate(&EventType::KeyRelease(key)).unwrap_or(()); }
                 if let Some(button) = (*bp2.borrow_mut()).take() { simulate(&EventType::ButtonRelease(button)).unwrap_or(()); }
+                thread::sleep(Duration::from_millis(20));
             };
 
             while let Ok(message) = rx.recv() {
                 match message {
-                    Message::UseItem(slot) => {
-                        send(&EventType::KeyPress(slot));
-                        send(&EventType::KeyRelease(slot));
-
-                        send(&EventType::ButtonPress(Button::Right));
-                        send(&EventType::ButtonRelease(Button::Right));
+                    Message::UseItem(slot, strong) => {
+                        let mut busy = busy.lock().unwrap();
+                        if !strong && *busy { return }
+                        if strong { *busy = true }
+                        send(vec![&EventType::KeyPress(slot), &EventType::ButtonPress(Button::Right)]);
+                        send(vec![&EventType::KeyRelease(slot), &EventType::ButtonRelease(Button::Right)]);
+                        if strong { *busy = false }
                     }
-                    Message::UseItemWeak(slot) => {
-                        send(&EventType::KeyPress(slot));
-                        send(&EventType::KeyRelease(slot));
-
-                        send(&EventType::ButtonPress(Button::Right));
-                        send(&EventType::ButtonRelease(Button::Right));
-                    }
-                    Message::PunchItemWeak(slot) => {
-                        send(&EventType::KeyPress(slot));
-                        send(&EventType::KeyRelease(slot));
-
-                        send(&EventType::ButtonPress(Button::Left));
-                        send(&EventType::ButtonRelease(Button::Left));
+                    Message::PunchItem(slot, strong) => {
+                        let mut busy = busy.lock().unwrap();
+                        if !strong && *busy { return }
+                        if strong { *busy = true }
+                        send(vec![&EventType::KeyPress(slot), &EventType::ButtonPress(Button::Left)]);
+                        send(vec![&EventType::KeyRelease(slot), &EventType::ButtonRelease(Button::Left)]);
+                        if strong { *busy = false }
                     }
                 }
                 if let Some(message) = (*skip.borrow_mut()).take() {
@@ -101,15 +99,15 @@ impl Minecraft {
     }
 
     pub fn use_item(&self, slot: Key) {
-        self.tx.send(Message::UseItem(slot)).unwrap();
+        self.tx.send(Message::UseItem(slot, true)).unwrap();
     }
     
     pub fn use_fishing_rod(&self) {
-        self.tx.send(Message::UseItemWeak(self.keybindings.lock().unwrap().fishing_rod)).unwrap();
+        self.tx.send(Message::UseItem(self.keybindings.lock().unwrap().fishing_rod, false)).unwrap();
     }
 
     pub fn use_sword(&self) {
-        self.tx.send(Message::PunchItemWeak(self.keybindings.lock().unwrap().sword)).unwrap();
+        self.tx.send(Message::PunchItem(self.keybindings.lock().unwrap().sword, false)).unwrap();
     }
 
     pub fn load_keybindings(&self, keybindings: KeyBindings) {
@@ -117,7 +115,7 @@ impl Minecraft {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize)]
 pub struct KeyBindings {
     pub start: Key,
     pub sword: Key,
