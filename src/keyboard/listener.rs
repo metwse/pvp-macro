@@ -1,18 +1,20 @@
 use core::panic;
-use std::sync::{Mutex, Arc};
+use std::{
+    fs, io, path::PathBuf, sync::{Arc, Mutex}
+};
 
 use super::{MacroService, minecraft};
+use crate::keyboard::Config;
 
 use rdev::{
     listen,
     Event, EventType
 };
 
-
 pub struct MacroListener {
-    service: Arc<MacroService>,
     listening: Mutex<bool>,
     running: Mutex<bool>,
+    service: Arc<MacroService>,
     minecraft: Arc<minecraft::Minecraft>,
 }
 
@@ -30,6 +32,13 @@ impl MacroListener {
                 minecraft,
             }
         )
+    }
+
+    pub fn load_keybindings(&self, path: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+        let file = fs::File::open(path)?;
+        let mut reader = io::BufReader::new(file);
+        self.minecraft.load_keybindings(minecraft::KeyBindings::from_json(&mut reader));
+        Ok(())
     }
     
     pub fn is_listening(&self) -> bool {
@@ -76,8 +85,6 @@ impl MacroListener {
     /// # Errors 
     ///
     /// Returns `Err` if called while macro already running
-    /// or [`MacroService::start`] returns `Err`.
-    ///
     pub fn start(&self) -> Result<(), String> {
         if self.is_running() { return Err(String::from("Macro is already running")); }
         *self.running.lock().unwrap() = true;
@@ -89,10 +96,8 @@ impl MacroListener {
     /// # Errors 
     ///
     /// Returns `Err` if called while macro is not running
-    /// or [`MacroService::pause`] returns `Err`.
-    ///
     pub fn stop(&self) -> Result<(), String> {
-        if !self.is_running() { return Err(String::from("Macro is already running")); }
+        if !self.is_running() { return Err(String::from("Macro is already not running")); }
         *self.running.lock().unwrap() = false;
         Ok(())
     }

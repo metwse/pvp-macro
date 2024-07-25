@@ -1,13 +1,20 @@
-use pvp_macro::ui;
-use pvp_macro::keyboard;
+use pvp_macro::{ 
+    ui,
+    keyboard,
+    data_dir
+};
 use std::{
     thread,
     time::Duration,
-    sync::Arc
+    sync::Arc,
+    fs
 };
 
 fn main() {
+    fs::create_dir(pvp_macro::data_dir()).unwrap_or(());
+
     let listener = keyboard::MacroListener::new();
+    listener.load_keybindings(data_dir().join("keybindings.json")).unwrap();
 
     let listener2 = Arc::clone(&listener);
     thread::spawn(move || {

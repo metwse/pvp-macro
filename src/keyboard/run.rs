@@ -14,22 +14,25 @@ enum Message {
     Start,
 }
 
+
 pub struct MacroService {
-    sleep_micros: [u64; 2],
-    count: [u64; 2],
-    random_ratio: f64,
+    settings: Arc<Mutex<Settings>>,
     running: Mutex<bool>,
     initialized: Mutex<bool>,
     park: (Mutex<Message>, Condvar),
     minecraft: Option<Arc<Minecraft>>,
 }
 
+pub struct Settings {
+    sleep_micros: [u64; 2],
+    count: [u64; 2],
+    random_ratio: f64,
+}
+
 impl Default for MacroService {
     fn default() -> Self {
         Self {
-            sleep_micros: [76_923, 200_000],
-            count: [13, 5],
-            random_ratio: 0.2,
+            settings: Arc::new(Mutex::new(Settings::default())),
             running: Mutex::new(false),
             initialized: Mutex::new(false),
             park: (Mutex::new(Message::None), Condvar::new()),
@@ -37,6 +40,17 @@ impl Default for MacroService {
         }
     }
 }
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            sleep_micros: [66_666, 50_000],
+            count: [7, 5],
+            random_ratio: 0.2,
+        }
+    }
+}
+
 
 impl MacroService {
     pub fn new(minecraft: Arc<Minecraft>) -> Self {
@@ -48,9 +62,9 @@ impl MacroService {
 
     fn sleep(&self, micros: u64, run: impl Fn() -> ()) -> Message {
         let (lock, cvar) = &self.park;
+        run();
         let (message, result) = cvar.wait_timeout(lock.lock().unwrap(), Duration::from_micros(micros)).unwrap();
         if !result.timed_out() { return *message; }
-        run();
 
         Message::None
     }
@@ -94,8 +108,9 @@ impl MacroService {
 
                 'inner: loop {
                     for i in 0..2 {
-                        for _ in 0..listener.count[i] {
-                            match listener.sleep(((1.0 + rng.gen_range(-listener.random_ratio..=listener.random_ratio)) * listener.sleep_micros[i] as f64).round() as u64, || {
+                        let settings = listener.settings.lock().unwrap();
+                        for _ in 0..=(settings.count[i] + 1){
+                            match listener.sleep(((1.0 + rng.gen_range(-settings.random_ratio..=settings.random_ratio)) * settings.sleep_micros[i] as f64).round() as u64, || {
                                 if i == 0 {
                                     listener.minecraft.as_ref().unwrap().use_sword();
                                 } else {

@@ -4,10 +4,12 @@ use rdev::{
     simulate
 };
 
+use serde::{Serialize, Deserialize};
+
 use std::{
-    time::Duration, thread,
-    sync::{ Arc, Mutex, mpsc },
-    rc::Rc, cell::RefCell
+    cell::RefCell, rc::Rc,
+    sync::{ mpsc, Arc, Mutex },
+    thread, time::Duration,
 };
 
 pub struct Minecraft {
@@ -26,9 +28,9 @@ impl Minecraft {
         let (tx, rx) = mpsc::channel();
         let tx = Arc::new(tx);
         let tx2 = Arc::clone(&tx);
-        
+
         let minecraft = Arc::new(Self {
-            keybindings: Mutex::new(KeyBindings::default()),
+            keybindings:  Mutex::new(KeyBindings::default()),
             tx
         });
 
@@ -51,7 +53,7 @@ impl Minecraft {
                     _ => unreachable!()
                 }
                 simulate(event_type).unwrap_or(());
-                if let Ok(message) = rx.recv_timeout(Duration::from_millis(20)) {
+                if let Ok(message) = rx.recv_timeout(Duration::from_millis(8)) {
                     if matches!(message, Message::UseItem(_)) {
                         *sk2.borrow_mut() = Some(message);
                     }
@@ -61,10 +63,8 @@ impl Minecraft {
             let kp2 = Rc::clone(&key_press);
             let bp2 = Rc::clone(&button_press);
             let release_all = || {
-                let mut wait = false;
-                if let Some(key) = (*kp2.borrow_mut()).take() { wait = true; simulate(&EventType::KeyRelease(key)).unwrap_or(()); }
-                if let Some(button) = (*bp2.borrow_mut()).take() { wait = true; simulate(&EventType::ButtonRelease(button)).unwrap_or(()); }
-                if wait { thread::sleep(Duration::from_millis(20)); }
+                if let Some(key) = (*kp2.borrow_mut()).take() { simulate(&EventType::KeyRelease(key)).unwrap_or(()); }
+                if let Some(button) = (*bp2.borrow_mut()).take() { simulate(&EventType::ButtonRelease(button)).unwrap_or(()); }
             };
 
             while let Ok(message) = rx.recv() {
@@ -111,9 +111,13 @@ impl Minecraft {
     pub fn use_sword(&self) {
         self.tx.send(Message::PunchItemWeak(self.keybindings.lock().unwrap().sword)).unwrap();
     }
+
+    pub fn load_keybindings(&self, keybindings: KeyBindings) {
+        *self.keybindings.lock().unwrap() = keybindings;
+    }
 }
 
-
+#[derive(Serialize, Deserialize, Debug)]
 pub struct KeyBindings {
     pub start: Key,
     pub sword: Key,
@@ -128,10 +132,10 @@ impl Default for KeyBindings {
             sword: Key::Num1,
             fishing_rod: Key::Num2,
             custom: vec![
-                [Key::KeyR, Key::Num3],
-                [Key::KeyF, Key::Num4],
+                [Key::KeyX, Key::Num3],
+                [Key::KeyC, Key::Num4],
                 [Key::KeyV, Key::Num5],
-                [Key::KeyC, Key::Num6],
+                [Key::KeyF, Key::Num6],
             ]
         }
     }

@@ -27,13 +27,13 @@ pub fn init(listener: Arc<MacroListener>) -> app::App {
     }
     app::set_visible_focus(false);
 
-    let mut win = window::Window::default().with_label("pvp macro").with_size(248, 324).with_id("window");
-    win.set_border(false);
+    let mut win = window::Window::default().with_label("Pvp Macro").with_size(248, 300).with_id("window");
 
     let mut root = group::Flex::default().size_of(&win);
     root.set_type(group::FlexType::Column);
     root.set_spacing(0);
 
+    /*
     let mut navbar = group::Flex::default();
     root.fixed(&navbar, 24);
     navbar.set_color(Theme::NAVBAR_BG);
@@ -90,6 +90,7 @@ pub fn init(listener: Arc<MacroListener>) -> app::App {
         }
     });
     // }}}
+    */
 
     let mut root2 = group::Flex::default();
     root2.set_type(group::FlexType::Row);
@@ -127,8 +128,6 @@ pub fn init(listener: Arc<MacroListener>) -> app::App {
             ("sidebar/metw.svg", MenuFn::NoArg(menus::metw)),
         ]
     {
-        listener.stop().unwrap_or(());
-
         let mut button = button::Button::default();
         sidebar.fixed(&button, 44);
         btn_cursor(&mut button);
@@ -143,6 +142,8 @@ pub fn init(listener: Arc<MacroListener>) -> app::App {
         let root2 = root2.clone();
         let listener2 = Arc::clone(&listener);
         button.set_callback(move |_| {
+            listener2.stop().unwrap_or(());
+
             if let MenuFn::NoArg(function) = function {
                 return function()
             }
