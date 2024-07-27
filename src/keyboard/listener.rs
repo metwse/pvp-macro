@@ -1,9 +1,13 @@
-use std::sync::{
-    Arc, Mutex,
+use std::{
+    fs, io, 
+    sync::{
+        Arc, Mutex,
+    }
 };
 
 use super::{run, minecraft};
 
+use crate::data_dir;
 use rdev::{
     listen,
     Event, EventType
@@ -13,14 +17,14 @@ use rdev::{
 pub struct Listener {
     listening: Mutex<bool>,
     running: Mutex<bool>,
-    service: Arc<run::MacroService>,
-    minecraft: Arc<minecraft::Minecraft>,
+    pub service: Arc<run::MacroService>,
+    pub minecraft: Arc<minecraft::Minecraft>,
 }
 
 impl Listener {
     pub fn new() -> Arc<Self> {
         let minecraft = minecraft::Minecraft::new();
-        let service = Arc::new(run::MacroService::new(Arc::clone(&minecraft)));
+        let service = run::MacroService::new(Arc::clone(&minecraft));
         Arc::clone(&service).init().unwrap();
         Arc::new(
             Self {
@@ -89,4 +93,38 @@ impl Listener {
     pub fn is_listening(&self) -> bool { *self.listening.lock().unwrap() }
 
     pub fn is_running(&self) -> bool { *self.running.lock().unwrap() }
+
+    pub fn save_settings(&self) {
+        use crate::keyboard::SaveJson;
+        let mut files: Vec<_> = ["settings.json", "keybindings.json"]
+            .iter()
+            .map(|file| fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(data_dir().join(file))
+                .unwrap()
+            )
+            .collect();
+        self.service.settings.lock().unwrap().to_json(&mut files[0]).unwrap();
+        self.minecraft.keybindings.lock().unwrap().to_json(&mut files[1]).unwrap();
+    }
+    
+    pub fn load_settings(&self) {
+        use crate::keyboard::SaveJson;
+        let files: Vec<_> = ["settings.json", "keybindings.json"]
+            .iter()
+            .map(|file| fs::File::open(data_dir().join(file)))
+            .collect();
+
+        if let Ok(file) = &files[0] {
+            let mut reader = io::BufReader::new(file);
+            *self.service.settings.lock().unwrap() = run::Settings::from_json(&mut reader);
+        }
+
+        if let Ok(file) = &files[1] {
+            let mut reader = io::BufReader::new(file);
+            *self.minecraft.keybindings.lock().unwrap() = minecraft::KeyBindings::from_json(&mut reader);
+        }
+    }
 }

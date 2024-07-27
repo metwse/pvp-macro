@@ -1,33 +1,48 @@
 use std::{
-     sync::{Arc, Condvar, Mutex}, thread, time::Duration
+     sync::{Arc, Condvar, Mutex},
+     thread, time::Duration
 };
 
 use rand::{thread_rng, Rng};
 
+use serde::{Serialize, Deserialize};
+
 use super::minecraft::Minecraft;
+
+
 
 #[derive(Clone, Copy)]
 enum Message {
-    None,
-    Skip,
-    Abort,
-    Start,
-    Stop,
+    None, Skip, Abort, Start, Stop,
 }
 
 
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Settings {
+    pub sleep_micros: [u64; 2],
+    pub count: [u64; 2],
+    pub random_ratio: f64,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            sleep_micros: [66_666, 50_000],
+            count: [7, 5],
+            random_ratio: 0.2,
+        }
+    }
+}
+
+
+
 pub struct MacroService {
-    settings: Arc<Mutex<Settings>>,
+    pub settings: Arc<Mutex<Settings>>,
     running: Mutex<bool>,
     initialized: Mutex<bool>,
     park: (Mutex<Message>, Condvar),
     minecraft: Option<Arc<Minecraft>>,
-}
-
-pub struct Settings {
-    sleep_micros: [u64; 2],
-    count: [u64; 2],
-    random_ratio: f64,
 }
 
 impl Default for MacroService {
@@ -42,23 +57,12 @@ impl Default for MacroService {
     }
 }
 
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            sleep_micros: [66_666, 50_000],
-            count: [7, 5],
-            random_ratio: 0.2,
-        }
-    }
-}
-
-
 impl MacroService {
-    pub fn new(minecraft: Arc<Minecraft>) -> Self {
-        Self {
+    pub fn new(minecraft: Arc<Minecraft>) -> Arc<Self> {
+        Arc::new(Self {
             minecraft: Some(minecraft),
             ..Self::default()
-        }
+        })
     }
 
     fn sleep(&self, micros: u64, run: impl Fn() -> ()) -> Message {
@@ -181,5 +185,9 @@ impl MacroService {
             self.notify_thread(Message::Skip);
         }
         self.minecraft.as_ref().unwrap().use_item(slot);
+    }
+
+    pub fn load_settings(&self, settings: Settings) {
+        *self.settings.lock().unwrap() = settings;
     }
 }

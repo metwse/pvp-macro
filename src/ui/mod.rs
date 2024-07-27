@@ -122,7 +122,7 @@ pub fn init(listener: Arc<Listener>) -> app::App {
     for (asset, function) in 
         [
             ("sidebar/run.svg", MenuFn::Macro(menus::run)),
-            ("sidebar/settings.svg", MenuFn::Standard(menus::settings)),
+            ("sidebar/settings.svg", MenuFn::Macro(menus::settings)),
             ("sidebar/keybindings.svg", MenuFn::Standard(menus::keybindings)),
             ("sidebar/info.svg", MenuFn::Standard(menus::info)),
             ("sidebar/metw.svg", MenuFn::NoArg(menus::metw)),

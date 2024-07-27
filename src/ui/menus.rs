@@ -1,8 +1,8 @@
 use fltk::{prelude::*, *};
 
-use crate::keyboard::Listener;
+use crate::keyboard::{Listener, run};
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use super::{ 
     theme::{self, format_button}, Theme,
@@ -13,16 +13,19 @@ use webbrowser;
 
 pub type MenuFrame<'a> = &'a mut group::Flex;
 
-pub fn settings(frame: MenuFrame) {
-    #[derive(Debug)]
+pub fn settings(frame: MenuFrame, listener: Arc<Listener>) {
     enum In {
-        F (f64),
-        I (i32),
+        F (f64, Box<dyn FnMut(&mut run::Settings, f64) -> ()>),
+        I (u64, Box<dyn FnMut(&mut run::Settings, u64) -> ()>),
     }
 
     frame.set_type(group::FlexType::Column);
 
-    fn input_num_field(frame: MenuFrame, text: String, input: &mut impl InputExt) {
+    fn input_num_field(frame: MenuFrame, 
+        text: String,
+        input: &mut (impl InputExt + WidgetBase),
+        default: String,
+    ) {
         frame.begin();
 
         let mut text_label = frame::Frame::default();
@@ -36,27 +39,82 @@ pub fn settings(frame: MenuFrame) {
 
         frame.add(input);
         frame.end();
+
+        input.set_value(&default[..]);
     }
+
+    let settings = listener.service.settings.lock().unwrap();
 
     for (text, input_type) in 
         [
-            ("Kılıç CPS", In::F(13.0)),
-            ("Kılıç vurma sayısı", In::I(13)),
-            ("Olta atma sayısı", In::I(5)),
-            ("Olta başına atma süresi", In::F(0.2)),
-            ("Rastgelelik yüzdesi", In::F(20.0)),
+            (
+                "Kılıç CPS", 
+                In::F( (1.0e8 / (settings.sleep_micros[0] as f64)).round() / 100.0, Box::new(|s, v| {
+                    s.sleep_micros[0] = (1.0e6 / v) as u64
+                }))
+            ),
+            (
+                "Kılıç vurma sayısı",
+                In::I(settings.count[0], Box::new(|s, v| {
+                    s.count[0] = v;
+                }))
+            ),
+            (
+                "Olta atma sayısı",
+                In::I(settings.count[1], Box::new(|s, v| { 
+                    s.count[1] = v;
+                }))
+            ),
+            (
+                "Olta başına atma süresi",
+                In::F(((settings.sleep_micros[1] as f64) / 1.0e4).round() / 100.0, Box::new(|s, v| {
+                    s.sleep_micros[1] = (v * 1.0e6) as u64
+                }))
+            ),
+            (
+                "Rastgelelik yüzdesi",
+                In::F((settings.random_ratio as f64 * 10000.0).round() / 100.0, Box::new(|s, v| {
+                    s.random_ratio = v / 100.0
+                }))
+            ),
         ] 
     {
+        let settings = Arc::clone(&listener.service.settings);
+        let listener = Arc::clone(&listener);
         match input_type {
-            In::F(default) => {
+            In::F(default, mut cb) => {
                 let mut input = input::FloatInput::default();
-                input_num_field(frame, String::from(text), &mut input);
-                input.set_value(&default.to_string()[..]);
+                input_num_field(frame, String::from(text), &mut input, default.to_string());
+                input.handle(move |input, event| {
+                    if !matches!(event, enums::Event::KeyDown) { return false }
+                    if let Ok(value) = input.value().parse::<f64>() {
+                        let mut settings = settings.lock().unwrap();
+                        cb(&mut settings, value);
+                        input.set_text_color(Theme::COLOR);
+                    } else {
+                        input.set_text_color(Theme::WARN);
+                    }
+                    input.redraw();
+                    listener.save_settings();
+                    true
+                });
             },
-            In::I(default) => {
+            In::I(default, mut cb) => {
                 let mut input = input::IntInput::default();
-                input_num_field(frame, String::from(text), &mut input);
-                input.set_value(&default.to_string()[..]);
+                input_num_field(frame, String::from(text), &mut input, default.to_string());
+                input.handle(move |input, event| {
+                    if !matches!(event, enums::Event::KeyDown) { return false }
+                    if let Ok(value) = input.value().parse::<u64>() {
+                        let mut settings = settings.lock().unwrap();
+                        cb(&mut settings, value);
+                        input.set_text_color(Theme::COLOR);
+                    } else {
+                        input.set_text_color(Theme::WARN);
+                    }
+                    input.redraw();
+                    listener.save_settings();
+                    true
+                });
             },
         }
     }

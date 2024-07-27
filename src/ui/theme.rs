@@ -7,7 +7,7 @@ use fltk::{
 pub struct Theme;
 impl Theme {
     pub const NAVBAR_BG: Color = Color::from_hex(0x3C4043);
-    pub const NAVBAR_QUIT_BG: Color = Color::from_hex(0xDF0135);
+    pub const WARN: Color = Color::from_hex(0xDF0135);
     pub const BG_1: Color = Color::from_hex(0x5C6063);
     pub const BG_2: Color = Color::from_hex(0x4C5053);
 

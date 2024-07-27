@@ -14,6 +14,7 @@ fn main() {
 
     let listener = keyboard::Listener::new();
     //listener.load_keybindings(data_dir().join("keybindings.json")).unwrap();
+    listener.load_settings();
 
     let listener2 = Arc::clone(&listener);
     thread::spawn(move || {

@@ -12,15 +12,43 @@ use std::{
     thread, time::Duration,
 };
 
-pub struct Minecraft {
-    tx: Arc<mpsc::Sender<Message>>,
-    busy: Arc<Mutex<bool>>,
-    pub keybindings: Mutex<KeyBindings>,
-}
+
 
 enum Message {
     UseItem(Key, bool),
     PunchItem(Key, bool),
+}
+
+
+#[derive(Serialize, Deserialize)]
+pub struct KeyBindings {
+    pub start: Key,
+    pub sword: Key,
+    pub fishing_rod: Key,
+    pub custom: Vec<[Key; 2]>,
+}
+
+impl Default for KeyBindings {
+    fn default() -> Self {
+        Self {
+            start: Key::ControlLeft,
+            sword: Key::Num1,
+            fishing_rod: Key::Num2,
+            custom: vec![
+                [Key::KeyX, Key::Num3],
+                [Key::KeyC, Key::Num4],
+                [Key::KeyV, Key::Num5],
+                [Key::KeyF, Key::Num6],
+            ]
+        }
+    }
+}
+
+
+pub struct Minecraft {
+    tx: Arc<mpsc::Sender<Message>>,
+    busy: Arc<Mutex<bool>>,
+    pub keybindings: Mutex<KeyBindings>,
 }
 
 impl Minecraft {
@@ -112,29 +140,5 @@ impl Minecraft {
 
     pub fn load_keybindings(&self, keybindings: KeyBindings) {
         *self.keybindings.lock().unwrap() = keybindings;
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct KeyBindings {
-    pub start: Key,
-    pub sword: Key,
-    pub fishing_rod: Key,
-    pub custom: Vec<[Key; 2]>,
-}
-
-impl Default for KeyBindings {
-    fn default() -> Self {
-        Self {
-            start: Key::ControlLeft,
-            sword: Key::Num1,
-            fishing_rod: Key::Num2,
-            custom: vec![
-                [Key::KeyX, Key::Num3],
-                [Key::KeyC, Key::Num4],
-                [Key::KeyV, Key::Num5],
-                [Key::KeyF, Key::Num6],
-            ]
-        }
     }
 }
