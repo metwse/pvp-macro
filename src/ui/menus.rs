@@ -2,7 +2,9 @@ use fltk::{prelude::*, *};
 
 use crate::keyboard::{Listener, run};
 
-use std::sync::{Arc, Mutex};
+use std::sync::{ 
+    Arc, Mutex
+};
 
 use super::{ 
     theme::{self, format_button}, Theme,
@@ -10,16 +12,14 @@ use super::{
 };
 use webbrowser;
 
-
 pub type MenuFrame<'a> = &'a mut group::Flex;
+
 
 pub fn settings(frame: MenuFrame, listener: Arc<Listener>) {
     enum In {
         F (f64, Box<dyn FnMut(&mut run::Settings, f64) -> ()>),
         I (u64, Box<dyn FnMut(&mut run::Settings, u64) -> ()>),
     }
-
-    frame.set_type(group::FlexType::Column);
 
     fn input_num_field(frame: MenuFrame, 
         text: String,
@@ -41,15 +41,23 @@ pub fn settings(frame: MenuFrame, listener: Arc<Listener>) {
         frame.end();
 
         input.set_value(&default[..]);
+        frame.end();
     }
 
-    let settings = listener.service.settings.lock().unwrap();
 
-    for (text, input_type) in 
-        [
+    let listener2 = Arc::clone(&listener);
+    let load_settings = move |frame: &Arc<Mutex<group::Flex>>| {
+        let listener = &listener2;
+        let settings = listener.service.settings.lock().unwrap();
+        let mut frame = frame.lock().unwrap();
+        for i in (0..frame.children()).rev() {
+            app::delete_widget(frame.child(i).unwrap());
+        }
+
+        let settings_data = [
             (
                 "Kılıç CPS", 
-                In::F( (1.0e8 / (settings.sleep_micros[0] as f64)).round() / 100.0, Box::new(|s, v| {
+                In::F((1.0e8 / (settings.sleep_micros[0] as f64)).round() / 100.0, Box::new(|s, v| {
                     s.sleep_micros[0] = (1.0e6 / v) as u64
                 }))
             ),
@@ -77,47 +85,69 @@ pub fn settings(frame: MenuFrame, listener: Arc<Listener>) {
                     s.random_ratio = v / 100.0
                 }))
             ),
-        ] 
-    {
-        let settings = Arc::clone(&listener.service.settings);
-        let listener = Arc::clone(&listener);
-        match input_type {
-            In::F(default, mut cb) => {
-                let mut input = input::FloatInput::default();
-                input_num_field(frame, String::from(text), &mut input, default.to_string());
-                input.handle(move |input, event| {
-                    if !matches!(event, enums::Event::KeyDown) { return false }
-                    if let Ok(value) = input.value().parse::<f64>() {
-                        let mut settings = settings.lock().unwrap();
-                        cb(&mut settings, value);
-                        input.set_text_color(Theme::COLOR);
-                    } else {
-                        input.set_text_color(Theme::WARN);
-                    }
-                    input.redraw();
-                    listener.save_settings();
-                    true
-                });
-            },
-            In::I(default, mut cb) => {
-                let mut input = input::IntInput::default();
-                input_num_field(frame, String::from(text), &mut input, default.to_string());
-                input.handle(move |input, event| {
-                    if !matches!(event, enums::Event::KeyDown) { return false }
-                    if let Ok(value) = input.value().parse::<u64>() {
-                        let mut settings = settings.lock().unwrap();
-                        cb(&mut settings, value);
-                        input.set_text_color(Theme::COLOR);
-                    } else {
-                        input.set_text_color(Theme::WARN);
-                    }
-                    input.redraw();
-                    listener.save_settings();
-                    true
-                });
-            },
+            ];
+
+        for (text, input_type) in settings_data.into_iter() {
+            let settings = Arc::clone(&listener.service.settings);
+            let listener = Arc::clone(&listener);
+            match input_type {
+                In::F(default, mut cb) => {
+                    let mut input = input::FloatInput::default();
+                    input_num_field(&mut frame, String::from(text), &mut input, default.to_string());
+                    input.handle(move |input, event| {
+                        if !matches!(event, enums::Event::KeyDown) { return false }
+                        if let Ok(value) = input.value().parse::<f64>() {
+                            let mut settings = settings.lock().unwrap();
+                            cb(&mut settings, value);
+                            input.set_text_color(Theme::COLOR);
+                        } else {
+                            input.set_text_color(Theme::WARN);
+                        }
+                        listener.save_settings();
+                        true
+                    });
+                },
+                In::I(default, mut cb) => {
+                    let mut input = input::IntInput::default();
+                    input_num_field(&mut frame, String::from(text), &mut input, default.to_string());
+                    input.handle(move |input, event| {
+                        if !matches!(event, enums::Event::KeyDown) { return false }
+                        if let Ok(value) = input.value().parse::<u64>() {
+                            let mut settings = settings.lock().unwrap();
+                            cb(&mut settings, value);
+                            input.set_text_color(Theme::COLOR);
+                        } else {
+                            input.set_text_color(Theme::WARN);
+                        }
+                        listener.save_settings();
+                        true
+                    });
+                },
+            }
         }
-    }
+        app::redraw();
+    };
+    frame.begin();
+    frame.set_type(group::FlexType::Column);
+
+    let frame_mutex = Arc::new(Mutex::new(group::Flex::default()));
+    frame_mutex.lock().unwrap().set_type(group::FlexType::Column);
+    load_settings(&frame_mutex);
+
+    let _ = frame::Frame::default();
+    let mut f = group::Flex::default();
+    let _ = frame::Frame::default();
+    let mut reset = button::Button::default().with_label("Sıfırla");
+    let frame2 = Arc::clone(&frame_mutex);
+    let listener2 = Arc::clone(&listener);
+    reset.set_callback(move |_| {
+        listener2.service.reset_settings();
+        load_settings(&frame2);
+    });
+    f.fixed(&reset, reset.measure_label().0 + 16);
+    f.end();
+    frame.fixed(&f, reset.measure_label().1 + 8);
+    format_button(&mut reset);
 }
 
 

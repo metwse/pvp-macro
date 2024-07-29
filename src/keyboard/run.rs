@@ -190,4 +190,8 @@ impl MacroService {
     pub fn load_settings(&self, settings: Settings) {
         *self.settings.lock().unwrap() = settings;
     }
+
+    pub fn reset_settings(self: &Arc<Self>) {
+        *self.settings.lock().unwrap() = Settings::default();
+    }
 }

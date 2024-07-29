@@ -1,6 +1,5 @@
 use fltk::{
-    prelude::*,
-    *,
+    prelude::*, *,
     enums::Color,
 };
 

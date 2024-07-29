@@ -141,4 +141,8 @@ impl Minecraft {
     pub fn load_keybindings(&self, keybindings: KeyBindings) {
         *self.keybindings.lock().unwrap() = keybindings;
     }
+
+    pub fn reset_keybindings(&self) {
+        *self.keybindings.lock().unwrap() = KeyBindings::default();
+    }
 }

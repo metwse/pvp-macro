@@ -1,21 +1,16 @@
 use fltk::{prelude::*, *};
 
 pub fn btn_cursor(wid: &mut (impl ButtonExt + WidgetExt + WidgetBase)) {
+    let mut win = wid.top_window().unwrap();
 
-    wid.handle(|_, event: enums::Event| {
-        use fltk::{
-            window::Window,
-            enums::{Cursor, Event}
-        };
-
-        let mut win: Window = app::widget_from_id("window").unwrap();
+    wid.handle(move |_, event: enums::Event| {
         match event {
-            Event::Enter => {
-                win.set_cursor(Cursor::Hand);
+            enums::Event::Enter => {
+                (*win).set_cursor(enums::Cursor::Hand);
                 true
             },
-            Event::Leave => {
-                win.set_cursor(Cursor::Arrow);
+            enums::Event::Leave => {
+                (*win).set_cursor(enums::Cursor::Arrow);
                 true
             },
             _ => false,
@@ -23,7 +18,12 @@ pub fn btn_cursor(wid: &mut (impl ButtonExt + WidgetExt + WidgetBase)) {
     })
 }
 
+// gets svg from assets
 pub fn get_svg(file: &str) -> image::SvgImage {
-    let image_data = std::str::from_utf8(crate::ASSETS_DIR.get_file(file).unwrap().contents()).unwrap();
+    let image_data = std::str::from_utf8(
+        crate::ASSETS_DIR.get_file(file)
+        .unwrap()
+        .contents()
+    ).unwrap();
     image::SvgImage::from_data(image_data).unwrap()
 }

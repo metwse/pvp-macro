@@ -1,5 +1,5 @@
 use pvp_macro::{ 
-    ui,
+    ui::UI,
     keyboard
 };
 use std::{
@@ -22,5 +22,7 @@ fn main() {
         listener2.listen();
     });
 
-    ui::run(ui::init(listener))
+    let ui = UI::new(Arc::clone(&listener));
+    ui.init();
+    ui.run();
 }
