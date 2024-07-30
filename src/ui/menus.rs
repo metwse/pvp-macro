@@ -1,10 +1,9 @@
 use fltk::{prelude::*, *};
+use rdev::Key;
 
 use crate::keyboard::{Listener, run};
 
-use std::sync::{ 
-    Arc, Mutex
-};
+use std::sync::{Arc, Mutex};
 
 use super::{ 
     theme::{self, format_button}, Theme,
@@ -200,56 +199,84 @@ pub fn run(frame: MenuFrame, listener: Arc<Listener>) {
 }
 
 
-pub fn keybindings(frame: MenuFrame) {
+pub fn keybindings(frame: MenuFrame, listener: Arc<Listener>) {
     frame.begin();
     frame.set_type(group::FlexType::Column);
 
-    enum KeyType {
-        Num,
-        All,
-    }
 
-    fn keybinding(label: &str, buttons: &[(KeyType, &str)]) -> group::Flex {
+    let keybinding = |label: &str, buttons: Vec<Box<dyn FnMut(Option<Key>) -> Key>>| -> group::Flex {
         let mut flex = group::Flex::default();
 
         let frame = frame::Frame::default().with_label(label);
         flex.fixed(&frame, frame.measure_label().0 + 8);
         let _ = frame::Frame::default();
-        for (btn_type, default_key) in buttons {
-            let mut btn = button::Button::default().with_label(default_key);
-            flex.fixed(&btn, btn.measure_label().0 + 16);
+        for mut key in buttons {
+            let mut btn = button::Button::default();
+
+            let mut flex = flex.clone();
+            let mut btn2 = btn.clone();
+            let mut set_btn_label = move |label: String| {
+                btn2.set_label(&label[..]);
+                flex.fixed(&btn2, btn2.measure_label().0 + 16);
+                app::redraw();
+            };
+            set_btn_label(format!("{:?}", key(None)));
+
+            let listener = Arc::clone(&listener);
+            btn.set_callback(move |_| {
+                key(listener.await_key());
+                set_btn_label(format!("{:?}", key(None)));
+            });
+
             format_button(&mut btn);
             btn_cursor(&mut btn);
-            let _ = match btn_type {
-                KeyType::Num => {
-                    true
-                },
-                KeyType::All => {
-                    true
-                },
-            };
         }
 
         flex.end();
         flex
-    }
-    
-    frame.fixed(&keybinding("Başlat", &[(KeyType::All, "CTRL")]), 24);
-    frame.fixed(&frame::Frame::default(), 4);
-    frame.fixed(&keybinding("Kılıç eli", &[(KeyType::Num, "1")]), 24);
-    frame.fixed(&keybinding("Olta eli", &[(KeyType::Num, "2")]), 24);
-    frame.fixed(&frame::Frame::default(), 4);
+    };
 
-    for (i, key) in ["z", "x", "c", "v"].iter().enumerate() {
-        frame.fixed(
-            &keybinding(&format!("Özel {}", i + 1)[..], 
-                &[
-                (KeyType::Num, &(i + 1).to_string()[..]),
-                (KeyType::All, key),
-                ]), 
-            24);
+    macro_rules! keybindings {
+        ($text: expr, [$ident: ident]) => {
+            {
+                let listener = Arc::clone(&listener);
+                let len = listener.minecraft.keybindings.lock().unwrap().$ident.len();
+                for x in 0..len {
+                    let mut vec = Vec::new();
+                    for a in 0..2 {
+                        let listener = Arc::clone(&listener);
+                        vec.push(Box::new(move |set| { 
+                            let mut keybindings = listener.minecraft.keybindings.lock().unwrap();
+                            if let Some(key) = set { keybindings.$ident[x][a] = key }
+                            keybindings.$ident[x][a]
+                        }) as Box<dyn FnMut(std::option::Option<rdev::Key>) -> rdev::Key>)
+                    }
+                    frame.fixed(&keybinding($text, vec), 24);
+                }
+            }
+        };
+        ($text: expr, $($ident: ident),*) => {
+            {
+                let listener = Arc::clone(&listener);
+                frame.fixed(&keybinding($text, vec![
+                    $(
+                        Box::new(move |set| { 
+                            let mut keybindings = listener.minecraft.keybindings.lock().unwrap();
+                            if let Some(key) = set { keybindings.$ident = key }
+                            keybindings.$ident
+                        })
+                    )*
+                ]), 24)
+            }
+        };
     }
 
+    keybindings!("Başlat", start);
+    frame.fixed(&frame::Frame::default(), 4);
+    keybindings!("Kılıç eli", sword);
+    keybindings!("Olta eli", fishing_rod);
+    frame.fixed(&frame::Frame::default(), 4);
+    keybindings!("Özel", [custom]);
     frame.end();
 }
 

@@ -2,6 +2,7 @@ use std::{
     fs, io, 
     sync::{
         Arc, Mutex,
+        Condvar
     }
 };
 
@@ -10,7 +11,8 @@ use super::{run, minecraft};
 use crate::data_dir;
 use rdev::{
     listen,
-    Event, EventType
+    Event, EventType,
+    Key
 };
 
 /// Listens keyboard and manages macro.
@@ -19,6 +21,7 @@ pub struct Listener {
     running: Mutex<bool>,
     pub service: Arc<run::MacroService>,
     pub minecraft: Arc<minecraft::Minecraft>,
+    event_key: Arc<(Mutex<bool>, Mutex<Option<Key>>, Condvar)>
 }
 
 impl Listener {
@@ -32,6 +35,7 @@ impl Listener {
                 running: Mutex::new(false),
                 minecraft,
                 service,
+                event_key: Arc::new((Mutex::new(false), Mutex::new(None), Condvar::new()))
             }
         )
     }
@@ -44,13 +48,24 @@ impl Listener {
             panic!("Error: {:?}", err);
         }
     }
+    
+    pub fn is_listening_key_event(&self) -> bool {
+        *self.event_key.0.lock().unwrap()
+    }
 
     fn callback(&self, event: Event) {
-        if !self.is_running() { return }
         let keybindings = self.minecraft.keybindings.lock().unwrap();
 
         match event.event_type {
             EventType::KeyPress(key) => {
+                if self.is_listening_key_event(){
+                    let (running, lock, cvar) = &*Arc::clone(&self.event_key);
+                    *lock.lock().unwrap() = Some(key);
+                    *running.lock().unwrap() = false;
+                    cvar.notify_one();
+                }
+
+                if !self.is_running() { return }
                 if key == keybindings.start { self.service.start().unwrap_or(()) }
                 else {
                     for [hotkey, slot] in keybindings.custom.iter() {
@@ -62,10 +77,29 @@ impl Listener {
                 }
             },
             EventType::KeyRelease(key) => {
+                if !self.is_running() { return }
                 if key == keybindings.start { self.service.pause().unwrap_or(()) }
+            },
+            EventType::ButtonPress(_) => {
+                if self.is_listening_key_event(){
+                    let (running, lock, cvar) = &*Arc::clone(&self.event_key);
+                    *lock.lock().unwrap() = None;
+                    *running.lock().unwrap() = false;
+                    cvar.notify_one();
+                }
             },
             _ => ()
         }
+    }
+
+    pub fn await_key(&self) -> Option<Key> {
+        let (running, lock, cvar) = &*self.event_key;
+        let mut running = running.lock().unwrap();
+        if *running { return None }
+        *running = true;
+        drop(running);
+        let key = cvar.wait(lock.lock().unwrap()).unwrap();
+        *key
     }
 
     /// Starts macro.

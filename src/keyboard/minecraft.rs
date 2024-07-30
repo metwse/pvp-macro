@@ -20,7 +20,7 @@ enum Message {
 }
 
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct KeyBindings {
     pub start: Key,
     pub sword: Key,

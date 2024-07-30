@@ -22,7 +22,7 @@ enum MenuFn {
 static MENU_DATA: [(Menu, &str, MenuFn); 5] = [
     (Menu::Run, "sidebar/run.svg", MenuFn::Macro(menus::run)),
     (Menu::Settings, "sidebar/settings.svg", MenuFn::Macro(menus::settings)),
-    (Menu::KeyBindings, "sidebar/keybindings.svg", MenuFn::Standard(menus::keybindings)),
+    (Menu::KeyBindings, "sidebar/keybindings.svg", MenuFn::Macro(menus::keybindings)),
     (Menu::Info, "sidebar/info.svg", MenuFn::Standard(menus::info)),
     (Menu::Metw, "sidebar/metw.svg", MenuFn::NoArg(menus::metw)),
 ];
