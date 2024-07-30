@@ -204,32 +204,39 @@ pub fn keybindings(frame: MenuFrame, listener: Arc<Listener>) {
     frame.set_type(group::FlexType::Column);
 
 
-    let keybinding = |label: &str, buttons: Vec<Box<dyn FnMut(Option<Key>) -> Key>>| -> group::Flex {
+    let mut buttons: Vec<(group::Flex, button::Button, Arc<Mutex<Box<dyn FnMut(Option<Key>) -> Key>>>)> = Vec::new();
+
+    let mut keybinding = |label: &str, keys: Vec<Box<dyn FnMut(Option<Key>) -> Key>>| -> group::Flex {
         let mut flex = group::Flex::default();
 
         let frame = frame::Frame::default().with_label(label);
         flex.fixed(&frame, frame.measure_label().0 + 8);
         let _ = frame::Frame::default();
-        for mut key in buttons {
+        for mut key in keys {
             let mut btn = button::Button::default();
 
-            let mut flex = flex.clone();
+            let mut flex2 = flex.clone();
             let mut btn2 = btn.clone();
             let mut set_btn_label = move |label: String| {
                 btn2.set_label(&label[..]);
-                flex.fixed(&btn2, btn2.measure_label().0 + 16);
+                flex2.fixed(&btn2, btn2.measure_label().0 + 16);
                 app::redraw();
             };
             set_btn_label(format!("{:?}", key(None)));
 
             let listener = Arc::clone(&listener);
+            let key = Arc::new(Mutex::new(key));
+            let key2 = Arc::clone(&key);
             btn.set_callback(move |_| {
+                let mut key = key2.lock().unwrap();
                 key(listener.await_key());
                 set_btn_label(format!("{:?}", key(None)));
+                listener.save_settings();
             });
 
             format_button(&mut btn);
             btn_cursor(&mut btn);
+            buttons.push((flex.clone(), btn, key));
         }
 
         flex.end();
@@ -277,6 +284,24 @@ pub fn keybindings(frame: MenuFrame, listener: Arc<Listener>) {
     keybindings!("Olta eli", fishing_rod);
     frame.fixed(&frame::Frame::default(), 4);
     keybindings!("Özel", [custom]);
+
+    let _ = frame::Frame::default();
+    let mut f = group::Flex::default();
+    let _ = frame::Frame::default();
+    let mut reset = button::Button::default().with_label("Sıfırla");
+    reset.set_callback(move |_| {
+        listener.minecraft.reset_keybindings();
+        for (flex, btn, key) in &mut buttons {
+            btn.set_label(&format!("{:?}", (*key.lock().unwrap())(None))[..]);
+            flex.fixed(btn, btn.measure_label().0 + 16);
+            app::redraw();
+        }
+    });
+    f.fixed(&reset, reset.measure_label().0 + 16);
+    f.end();
+    frame.fixed(&f, reset.measure_label().1 + 8);
+    format_button(&mut reset);
+
     frame.end();
 }
 
