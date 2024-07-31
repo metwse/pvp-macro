@@ -25,7 +25,7 @@ pub struct UI {
 impl UI {
     pub fn new(listener: Arc<Listener>) -> Arc<Self> {
         let window = window::Window::default()
-            .with_label("Pvp Macro")
+            .with_label("PvP Macro")
             .with_size(248, 300);
         window.end();
 

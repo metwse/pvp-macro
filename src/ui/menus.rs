@@ -193,7 +193,7 @@ pub fn info(frame: MenuFrame) {
 
 pub fn run(frame: MenuFrame, listener: Arc<Listener>) {
     frame.begin();
-    let _ = frame::Frame::default().with_label("pvp macro çalışıyor");
+    let _ = frame::Frame::default().with_label("PvP macro çalışıyor.");
     listener.start().unwrap_or(());
     frame.end();
 }
